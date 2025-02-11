@@ -250,7 +250,7 @@
         }
     } else if (urlAtual.startsWith("gradeHoraria", 37)){
         funcaoAtual = "gradeHoraria";
-        alert(funcaoAtual);
+        // alert(funcaoAtual);
     }
 
 
