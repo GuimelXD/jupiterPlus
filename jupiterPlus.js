@@ -35,7 +35,6 @@
                 container.style.fontSize = "14px";
                 container.style.borderRadius = "8px";
                 container.style.boxShadow = "0px 0px 10px rgba(0, 0, 0, 0.2)";
-                // container.style.maxWidth = "400px";
                 container.style.textAlign = "center";
                 container.style.fontFamily = "Arial, sans-serif";
                 container.innerHTML = `
