@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jupiter+
 // @namespace    http://tampermonkey.net/
-// @version      Alpha-v1
+// @version      0.1
 // @description  Script para adicionar funcionalidades ao JupiterWeb
 // @author       Guimel Paranhos (Eng. Elétrica)
 // @match        https://uspdigital.usp.br/jupiterweb/*
