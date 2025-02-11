@@ -1,12 +1,13 @@
 // ==UserScript==
 // @name         Jupiter+
 // @namespace    http://tampermonkey.net/
-// @version      2025-02-10
+// @version      Alpha-v1
 // @description  Script para adicionar funcionalidades ao JupiterWeb
 // @author       Guimel Paranhos (Eng. Elétrica)
 // @match        https://uspdigital.usp.br/jupiterweb/*
 // @icon         https://uspdigital.usp.br/comumwebdev/imagens/favicon.ico
 // @grant        none
+// @license      The Unlicense
 // ==/UserScript==
 
 (function() {
@@ -148,65 +149,105 @@
                 let manualCounting = false;
     
                 // Função para calcular créditos automaticamente
-                async function calcularCreditosComDelay() {
-                    let disciplinas = Array.from(document.querySelectorAll("#grade_curricular td[role='gridcell']"))
-                    .filter(celula => celula.textContent.trim() !== "");
-                    let disciplinasProcessadas = new Set();
-                    
-                    let total = {
-                        cursadas: 0,
-                        cursando: 0,
-                        a_cursar: 0,
-                        eletivas: 0
-                    };
+                async function obterCreditos(codigoDisciplina) {
+                    let url = `https://uspdigital.usp.br/jupiterweb/obterDisciplina?sgldis=${codigoDisciplina}`;
+                
+                    try {
+                        let resposta = await fetch(url);
+                        let html = await resposta.text();
+                
+                        let parser = new DOMParser();
+                        let doc = parser.parseFromString(html, "text/html");
+                
+                        let creditosAula = 0;
+                        let creditosTrabalho = 0;
+                
+                        // Percorre todas as células da tabela para encontrar os créditos
+                        let celulas = Array.from(doc.querySelectorAll("td"));
 
+                        for (let i = 0; i < celulas.length; i++) {
+                            let texto = celulas[i].textContent.trim();
+                
+                            if (texto.includes("Créditos Aula")) {
+                                creditosAula = parseInt(celulas[i + 1]?.textContent.trim() || "0");
+                            } 
+                            if (texto.includes("Créditos Trabalho")) {
+                                creditosTrabalho = parseInt(celulas[i + 1]?.textContent.trim() || "0");
+                            }                            
+                        }
+                
+                        return { aula: creditosAula, trabalho: creditosTrabalho };
+                
+                    } catch (erro) {
+                        console.error(`Erro ao obter créditos da disciplina ${codigoDisciplina}:`, erro);
+                        return { aula: 0, trabalho: 0 };
+                    }
+                }
+                
+                
+                async function calcularCreditosAutomaticamente() {
+                    let disciplinas = Array.from(document.querySelectorAll("#grade_curricular td[role='gridcell']"))
+                        .filter(celula => celula.textContent.trim() !== "");
+
+                    console.log(disciplinas);
+                
+                    let disciplinasProcessadas = new Set();
+                    let totalAulas = { cursadas: 0, cursando: 0, a_cursar: 0, eletivas: 0 };
+                
                     for (let i = 0; i < disciplinas.length; i++) {
                         let celula = disciplinas[i];
                         let bgColor = window.getComputedStyle(celula).backgroundColor;
-
-                        celula.click();
-                        await new Promise(resolve => setTimeout(resolve, 150));
-
-                        let codigoDisciplina = document.querySelector("#div_disciplina .coddis")?.textContent.trim() || "000000";
-                        let creditosAula = parseInt(document.querySelector("#div_disciplina .creaul")?.textContent.trim() || "0");
-                        let creditosTrabalho = parseInt(document.querySelector("#div_disciplina .cretrb")?.textContent.trim() || "0");
-
+                
+                        let codigoDisciplina = celula.innerHTML;
+                
                         let categoria;
-                        if (bgColor === "rgb(0, 192, 0)") categoria = "cursadas";
-                        else if (bgColor === "rgb(255, 255, 128)") categoria = "cursando";
-                        else if (bgColor === "rgb(255, 160, 96)") categoria = "a_cursar";
-                        else if (bgColor === "rgb(192, 192, 192)") categoria = "eletivas";
+                        if (celula.classList.contains("disciplinaCursada")) categoria = "cursadas";
+                        else if (celula.classList.contains("disciplinaCursando")) categoria = "cursando";
+                        else if (celula.classList.contains("disciplinaA_Cursar")) categoria = "a_cursar";
+                        else if (celula.classList.contains("discplinaEletivas")) categoria = "eletivas";
                         else continue;
-
+                
                         if (!disciplinasProcessadas.has(codigoDisciplina)) {
-                            creditos[categoria].aula += creditosAula;
-                            creditos[categoria].trabalho += creditosTrabalho;
-                            disciplinasProcessadas.add(codigoDisciplina);
+                            let { aula, trabalho } = await obterCreditos(codigoDisciplina);
+                
+                            console.log("disciplina " + codigoDisciplina + " tem " + aula + " creaula e " + trabalho + " crtrabalho");
 
+                            creditos[categoria].aula += aula;
+                            creditos[categoria].trabalho += trabalho;
+
+                            totalAulas[categoria] += aula;
+                            disciplinasProcessadas.add(codigoDisciplina);
+                
                             document.getElementById(`ca_${categoria}`).textContent = creditos[categoria].aula;
                             document.getElementById(`ct_${categoria}`).textContent = creditos[categoria].trabalho;
-                            total[categoria] = creditos[categoria].aula + creditos[categoria].trabalho
-                            document.getElementById(`t_${categoria}`).textContent = total[categoria];
+                            document.getElementById(`t_${categoria}`).textContent = creditos[categoria].aula + creditos[categoria].trabalho;
                         }
                     }
-                    let creditosTotais = total.cursadas + total.cursando + total.a_cursar;
-                    console.log(creditosTotais);
-                    document.getElementById(`p_cursadas`).textContent = (total.cursadas / creditosTotais * 100).toFixed(2) + "%";
-                    document.getElementById(`p_cursando`).textContent = (total.cursando / creditosTotais * 100).toFixed(2) + "%";
-                    document.getElementById(`p_a_cursar`).textContent = (total.a_cursar / creditosTotais * 100).toFixed(2) + "%";
+                
+                    let creditosTotaisAula = totalAulas.cursadas + totalAulas.cursando + totalAulas.a_cursar;
+                    document.getElementById(`p_cursadas`).textContent = (totalAulas.cursadas / creditosTotaisAula * 100).toFixed(2) + "%";
+                    document.getElementById(`p_cursando`).textContent = (totalAulas.cursando / creditosTotaisAula * 100).toFixed(2) + "%";
+                    document.getElementById(`p_a_cursar`).textContent = (totalAulas.a_cursar / creditosTotaisAula * 100).toFixed(2) + "%";
                 }
     
                 // Contagem manual ao clicar nas disciplinas
                 document.querySelectorAll("#grade_curricular td[role='gridcell']").forEach(celula => {
-                    celula.addEventListener("click", function() {
+                    let bgColor = window.getComputedStyle(celula).backgroundColor;
+                    if (bgColor === "rgb(0, 192, 0)") celula.classList.add("disciplinaCursada");
+                    else if (bgColor === "rgb(255, 255, 128)") celula.classList.add("disciplinaCursando");
+                    else if (bgColor === "rgb(255, 160, 96)") celula.classList.add("disciplinaA_Cursar");
+                    else if (bgColor === "rgb(192, 192, 192)") celula.classList.add("discplinaEletivas");
+
+                    celula.addEventListener("click", async function() {
                         if (!manualCounting) return;
+
+                        let codigoDisciplina = celula.innerHTML;
     
+                        let { aula, trabalho } = await obterCreditos(codigoDisciplina);
+
                         setTimeout(() => {
-                            let creditosAula = parseInt(document.querySelector("#div_disciplina .creaul")?.textContent.trim() || "0");
-                            let creditosTrabalho = parseInt(document.querySelector("#div_disciplina .cretrb")?.textContent.trim() || "0");
-    
-                            totalCreditosManual.aula += creditosAula;
-                            totalCreditosManual.trabalho += creditosTrabalho;
+                            totalCreditosManual.aula += aula;
+                            totalCreditosManual.trabalho += trabalho;
     
                             document.getElementById("manual_aula").textContent = totalCreditosManual.aula;
                             document.getElementById("manual_trabalho").textContent = totalCreditosManual.trabalho;
@@ -216,7 +257,7 @@
                 });
     
                 // Botões
-                document.getElementById("iniciarCalculo").addEventListener("click", calcularCreditosComDelay);
+                document.getElementById("iniciarCalculo").addEventListener("click", calcularCreditosAutomaticamente);
                 document.getElementById("limparCalculo").addEventListener("click", () => {
                     Object.keys(creditos).forEach(categoria => {
                         creditos[categoria].aula = 0;
@@ -224,6 +265,7 @@
                         document.getElementById(`ca_${categoria}`).textContent = "0";
                         document.getElementById(`ct_${categoria}`).textContent = "0";
                         document.getElementById(`t_${categoria}`).textContent = "0";
+                        document.getElementById(`p_${categoria}`).textContent = "0%";
                     });
                 });
                 document.getElementById("iniciarManual").addEventListener("click", () => {
@@ -250,13 +292,6 @@
         }
     } else if (urlAtual.startsWith("gradeHoraria", 37)){
         funcaoAtual = "gradeHoraria";
-        // alert(funcaoAtual);
     }
-
-
-
-
-
-
 
 })();
